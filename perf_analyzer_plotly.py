@@ -13,6 +13,13 @@ import argparse
 import sys
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional
+from scipy import stats
+from sklearn.linear_model import LinearRegression
+from sklearn.preprocessing import PolynomialFeatures
+from sklearn.metrics import r2_score
+from sklearn.cluster import KMeans
+import warnings
+warnings.filterwarnings('ignore')
 
 class PerformanceAnalyzer:
     def __init__(self):
