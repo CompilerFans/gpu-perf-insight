@@ -21,16 +21,21 @@ class PerformanceAnalyzer:
     def _get_rgb_from_name(self, color_name):
         """将颜色名称转换为RGB值"""
         color_map = {
-            'red': '255, 0, 0',
-            'green': '0, 128, 0', 
-            'blue': '0, 0, 255',
-            'orange': '255, 165, 0',
-            'purple': '128, 0, 128',
-            'brown': '139, 69, 19',
-            'pink': '255, 192, 203',
-            'gray': '128, 128, 128',
-            'olive': '128, 128, 0',
-            'cyan': '0, 255, 255'
+            'red': '220, 38, 38',           # 亮红
+            'green': '34, 197, 94',         # 翠绿  
+            'blue': '59, 130, 246',         # 亮蓝
+            'orange': '249, 115, 22',       # 亮橙
+            'purple': '168, 85, 247',       # 亮紫
+            'brown': '161, 98, 7',          # 棕色
+            'pink': '236, 72, 153',         # 亮粉
+            'gray': '107, 114, 128',        # 灰色
+            'olive': '132, 204, 22',        # 橄榄绿
+            'cyan': '6, 182, 212',          # 青色
+            'indigo': '99, 102, 241',       # 靛蓝
+            'emerald': '16, 185, 129',      # 翡翠绿
+            'rose': '244, 63, 94',          # 玫瑰红
+            'amber': '245, 158, 11',        # 琥珀色
+            'teal': '20, 184, 166'          # 蓝绿色
         }
         return color_map.get(color_name, '0, 0, 0')  # 默认黑色
         
@@ -74,127 +79,6 @@ class PerformanceAnalyzer:
         combined_df = pd.concat(self.datasets.values(), ignore_index=True)
         return combined_df
     
-    def create_comparison_line_chart(self, save_path: str = None, width: int = 1200, height: int = 800):
-        """
-        创建多GPU性能对比折线图
-        每个算法一条线，不同GPU用不同颜色/样式区分
-        """
-        df = self.get_combined_dataframe()
-        
-        if df.empty:
-            print("没有数据可以绘制")
-            return None
-        
-        # 创建图表
-        fig = go.Figure()
-        
-        # 获取唯一的算法和GPU标签
-        algorithms = df['algorithm'].unique()
-        gpu_labels = df['gpu_label'].unique()
-        
-        # 颜色和线型配置
-        colors = px.colors.qualitative.Set1
-        line_styles = ['solid', 'dash', 'dot', 'dashdot']
-        
-        for i, gpu in enumerate(gpu_labels):
-            gpu_data = df[df['gpu_label'] == gpu]
-            
-            for j, algorithm in enumerate(algorithms):
-                algo_data = gpu_data[gpu_data['algorithm'] == algorithm]
-                
-                if algo_data.empty:
-                    continue
-                
-                # 按数据量排序
-                algo_data = algo_data.sort_values('data_size')
-                
-                # 创建轨迹
-                trace_name = f"{gpu} - {algorithm}"
-                
-                # 创建自定义hover text显示数据大小标签
-                def mb_to_label(mb_value):
-                    if mb_value < 1:
-                        return f"{int(mb_value * 1024)}KB"
-                    elif mb_value < 1024:
-                        return f"{int(mb_value)}MB"
-                    else:
-                        return f"{int(mb_value / 1024)}GB"
-                
-                hover_labels = [mb_to_label(x) for x in algo_data['data_size']]
-                
-                fig.add_trace(go.Scatter(
-                    x=algo_data['data_size'],
-                    y=algo_data['throughput'],
-                    mode='lines+markers',
-                    name=trace_name,
-                    line=dict(
-                        color=colors[j % len(colors)],
-                        dash=line_styles[i % len(line_styles)],
-                        width=2
-                    ),
-                    marker=dict(
-                        size=8,
-                        symbol=['circle', 'square', 'diamond', 'triangle-up'][i % 4]
-                    ),
-                    customdata=hover_labels,
-                    hovertemplate=(
-                        f"<b>{trace_name}</b><br>"
-                        "Data Size: %{customdata}<br>"
-                        "Throughput: %{y:.2f} GB/s<br>"
-                        "<extra></extra>"
-                    )
-                ))
-        
-        # 更新布局
-        fig.update_layout(
-            title=dict(
-                text="GPU Performance Comparison - Parallel Computing Algorithms",
-                x=0.5,
-                font=dict(size=20)
-            ),
-            xaxis=dict(
-                title=dict(text="Data Size (MB)", font=dict(size=14)),
-                tickfont=dict(size=12),
-                type="log",  # 使用对数坐标
-                tickmode='array',
-                tickvals=[0.004, 0.008, 0.016, 0.032, 0.064, 0.125, 0.25, 0.5, 1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096],
-                ticktext=['4KB', '8KB', '16KB', '32KB', '64KB', '128KB', '256KB', '512KB', '1MB', '2MB', '4MB', '8MB', '16MB', '32MB', '64MB', '128MB', '256MB', '512MB', '1GB', '2GB', '4GB']
-            ),
-            yaxis=dict(
-                title=dict(text="Throughput (GB/s)", font=dict(size=14)),
-                tickfont=dict(size=12),
-                type="log"  # 使用对数坐标
-            ),
-            legend=dict(
-                orientation="v",
-                yanchor="top",
-                y=1,
-                xanchor="left",
-                x=1.02,
-                font=dict(size=11)
-            ),
-            width=width,
-            height=height,
-            hovermode='closest',
-            plot_bgcolor='white',
-            paper_bgcolor='white'
-        )
-        
-        # 添加网格
-        fig.update_xaxes(showgrid=True, gridwidth=1, gridcolor='lightgray')
-        fig.update_yaxes(showgrid=True, gridwidth=1, gridcolor='lightgray')
-        
-        # 保存图表
-        if save_path:
-            if save_path.endswith('.html'):
-                fig.write_html(save_path)
-                print(f"交互式图表已保存: {save_path}")
-            else:
-                fig.write_image(save_path, width=width, height=height)
-                print(f"静态图表已保存: {save_path}")
-        
-        # 不自动显示图表，避免输出HTML内容
-        return fig
     
     def calculate_percentage_differences(self, extreme_threshold=300):
         """
@@ -252,7 +136,6 @@ class PerformanceAnalyzer:
                     comparison_throughput = comparison_data['throughput'].iloc[0]
                     
                     # 检查异常数据
-                    import numpy as np
                     is_anomaly = False
                     anomaly_reason = ""
                     
@@ -282,8 +165,8 @@ class PerformanceAnalyzer:
                         })
                         continue
                     
-                    # 计算百分比差异
-                    percentage_diff = ((comparison_throughput - baseline_throughput) / baseline_throughput) * 100
+                    # 计算百分比比值，100%表示性能相等
+                    percentage_diff = (comparison_throughput / baseline_throughput) * 100
                     
                     # 检查计算结果是否异常
                     if np.isnan(percentage_diff) or np.isinf(percentage_diff):
@@ -306,24 +189,31 @@ class PerformanceAnalyzer:
                         'comparison_throughput': comparison_throughput
                     }
                     
-                    # 检查是否为极端数据
-                    if abs(percentage_diff) > extreme_threshold:
+                    # 检查是否为极端数据 (比值超过300%或低于33.3%)
+                    if percentage_diff > extreme_threshold or percentage_diff < (100 * 100 / extreme_threshold):
                         extreme_data.append(data_point)
                     else:
                         percentage_data.append(data_point)
         
         return pd.DataFrame(percentage_data), extreme_data, anomaly_data
 
-    def create_comparison_line_chart(self, save_path: str = None, width: int = 1200, height: int = 800):
+    def create_comparison_line_chart(self, save_path: str = None, width: int = 1200, height: int = 800, reference_lines: list = None):
         """
         创建多GPU性能对比折线图和百分比差异图
         包含原始性能图和相对于第一个GPU的百分比差异图
+        
+        Args:
+            reference_lines: 参考线列表，默认[100.0]。单个值表示全局参考线，多个值表示每个对比组的参考线
         """
         df = self.get_combined_dataframe()
         
         if df.empty:
             print("没有数据可以绘制")
             return None
+        
+        # 处理参考线默认值
+        if reference_lines is None:
+            reference_lines = [100.0]
         
         # 获取GPU标签数量
         gpu_labels = df['gpu_label'].unique()
@@ -430,11 +320,12 @@ class PerformanceAnalyzer:
         # 创建自定义hover text显示数据大小标签的函数
         def mb_to_label(mb_value):
             if mb_value < 1:
-                return f"{int(mb_value * 1024)}KB"
+                simplified = f"{int(mb_value * 1024)}KB"
             elif mb_value < 1024:
-                return f"{int(mb_value)}MB"
+                simplified = f"{mb_value:.1f}MB" if mb_value != int(mb_value) else f"{int(mb_value)}MB"
             else:
-                return f"{int(mb_value / 1024)}GB"
+                simplified = f"{mb_value/1024:.1f}GB" if (mb_value/1024) != int(mb_value/1024) else f"{int(mb_value/1024)}GB"
+            return f"{mb_value:.1f}MB ({simplified})"
         
         # 添加原始性能数据到第一个子图（或唯一的图表）
         for i, gpu in enumerate(gpu_labels):
@@ -527,7 +418,7 @@ class PerformanceAnalyzer:
                             hovertemplate=(
                                 f"<b>{gpu} vs {baseline_gpu} - {algorithm}</b><br>"
                                 "Data Size: %{customdata}<br>"
-                                "Performance Difference: %{y:+.1f}%<br>"
+                                "Performance Ratio: %{y:.1f}%<br>"
                                 "Baseline: %{customdata[0]:.2f} GB/s<br>"
                                 "Comparison: %{customdata[1]:.2f} GB/s<br>"
                                 "<extra></extra>"
@@ -566,13 +457,73 @@ class PerformanceAnalyzer:
                 bargroupgap=0.1  # 不同组间距
             )
             
+            # 获取实际数据规模并生成刻度标签
+            actual_data_sizes = sorted(df['data_size'].unique())
+            
+            # 生成刻度标签函数
+            def generate_tick_label(mb_value):
+                if mb_value < 1:
+                    return f"{int(mb_value * 1024)}KB"
+                elif mb_value < 1024:
+                    if mb_value == int(mb_value):
+                        return f"{int(mb_value)}MB"
+                    else:
+                        return f"{mb_value:.1f}MB"
+                else:
+                    gb_value = mb_value / 1024
+                    if gb_value == int(gb_value):
+                        return f"{int(gb_value)}GB"
+                    else:
+                        return f"{gb_value:.1f}GB"
+            
+            # 选择合适的刻度点 - 显示所有重要的数据点以便用户查看详细数据
+            # 由于我们有增强的数据采样，直接显示所有数据点作为刻度
+            # 这样用户可以看到所有的1.2MB, 1.6MB, 1.8MB等详细数据点
+            
+            if len(actual_data_sizes) <= 30:
+                # 数据点不太多，显示所有数据点
+                selected_tickvals = actual_data_sizes
+                selected_ticktext = [generate_tick_label(val) for val in selected_tickvals]
+            else:
+                # 数据点很多时，智能选择显示
+                tick_indices = []
+                
+                # 1. 添加初期密集采样的重要点（1-10MB范围）
+                for i, size in enumerate(actual_data_sizes):
+                    if size <= 10:  # 1-10MB范围显示更多刻度
+                        tick_indices.append(i)
+                    elif size <= 100 and i % 2 == 0:  # 10-100MB范围隔点显示
+                        tick_indices.append(i)
+                    elif size <= 1024 and i % 4 == 0:  # 100MB-1GB范围稀疏显示
+                        tick_indices.append(i)
+                    elif i % 6 == 0:  # 1GB以上更稀疏显示
+                        tick_indices.append(i)
+                
+                # 2. 确保包含重要的里程碑点
+                milestone_values = [1, 1.2, 1.6, 1.8, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096]
+                for milestone in milestone_values:
+                    if milestone in actual_data_sizes:
+                        milestone_idx = actual_data_sizes.index(milestone)
+                        if milestone_idx not in tick_indices:
+                            tick_indices.append(milestone_idx)
+                
+                # 3. 总是包含首尾点
+                if 0 not in tick_indices:
+                    tick_indices.append(0)
+                if len(actual_data_sizes) - 1 not in tick_indices:
+                    tick_indices.append(len(actual_data_sizes) - 1)
+                
+                tick_indices = sorted(list(set(tick_indices)))
+                selected_tickvals = [actual_data_sizes[i] for i in tick_indices]
+                selected_ticktext = [generate_tick_label(val) for val in selected_tickvals]
+            
             # 更新第一个子图的轴标签
             fig.update_xaxes(
                 title=dict(text="Data Size (MB)", font=dict(size=14)),
                 type="log",
                 tickmode='array',
-                tickvals=[0.004, 0.008, 0.016, 0.032, 0.064, 0.125, 0.25, 0.5, 1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096],
-                ticktext=['4KB', '8KB', '16KB', '32KB', '64KB', '128KB', '256KB', '512KB', '1MB', '2MB', '4MB', '8MB', '16MB', '32MB', '64MB', '128MB', '256MB', '512MB', '1GB', '2GB', '4GB'],
+                tickvals=selected_tickvals,
+                ticktext=selected_ticktext,
                 row=1, col=1
             )
             fig.update_yaxes(
@@ -586,12 +537,12 @@ class PerformanceAnalyzer:
                 title=dict(text="Data Size (MB)", font=dict(size=14)),
                 type="log",
                 tickmode='array',
-                tickvals=[0.004, 0.008, 0.016, 0.032, 0.064, 0.125, 0.25, 0.5, 1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096],
-                ticktext=['4KB', '8KB', '16KB', '32KB', '64KB', '128KB', '256KB', '512KB', '1MB', '2MB', '4MB', '8MB', '16MB', '32MB', '64MB', '128MB', '256MB', '512MB', '1GB', '2GB', '4GB'],
+                tickvals=selected_tickvals,
+                ticktext=selected_ticktext,
                 row=2, col=1
             )
             fig.update_yaxes(
-                title=dict(text="Performance Difference (%)", font=dict(size=14)),
+                title=dict(text="Performance Ratio (%)", font=dict(size=14)),
                 row=2, col=1
             )
             
@@ -609,8 +560,22 @@ class PerformanceAnalyzer:
                 fig.update_xaxes(showgrid=True, gridwidth=1, gridcolor='lightgray', row=hist_row, col=hist_col)
                 fig.update_yaxes(showgrid=True, gridwidth=1, gridcolor='lightgray', row=hist_row, col=hist_col)
             
-            # 添加零线到百分比图
-            fig.add_hline(y=0, line_dash="dash", line_color="black", line_width=1, row=2, col=1)
+            # 添加基准线(100%)到百分比图
+            fig.add_hline(y=100, line_dash="dash", line_color="black", line_width=1, row=2, col=1)
+            
+            # 添加用户指定的参考线到百分比图
+            if reference_lines:
+                for ref_line in reference_lines:
+                    if ref_line != 100:  # 避免重复添加100%线
+                        fig.add_hline(
+                            y=ref_line, 
+                            line_dash="solid", 
+                            line_color="blue", 
+                            line_width=2,
+                            annotation_text=f"参考线: {ref_line}%",
+                            annotation_position="right",
+                            row=2, col=1
+                        )
             
             # 为每个对比组创建独立的直方图子图
             if percentage_df is not None and not percentage_df.empty:
@@ -643,20 +608,20 @@ class PerformanceAnalyzer:
                         hist_row = 3 + i // cols
                         hist_col = (i % cols) + 1
                     
-                    # 1. 添加直方图显示整体分布
+                    # 1. 添加大直方图显示整体分布（背景）
                     histogram_trace = go.Histogram(
                         x=gpu_data['percentage_diff'],
                         nbinsx=20,
                         name=f'{gpu} 分布',
-                        opacity=0.7,
+                        opacity=0.3,  # 降低透明度作为背景
                         marker=dict(
-                            color='rgba(30, 144, 255, 0.7)',
-                            line=dict(color='rgba(30, 144, 255, 1)', width=1)
+                            color='rgba(30, 144, 255, 0.3)',
+                            line=dict(color='rgba(30, 144, 255, 0.8)', width=1)
                         ),
                         showlegend=True,
                         hovertemplate=(
                             f"<b>{gpu} vs {gpu_labels[0]} 分布</b><br>"
-                            "性能差异范围: %{x}<br>"
+                            "性能比值范围: %{x}<br>"
                             "数据点数量: %{y}<br>"
                             "<extra></extra>"
                         )
@@ -664,7 +629,6 @@ class PerformanceAnalyzer:
                     fig.add_trace(histogram_trace, row=hist_row, col=hist_col)
                     
                     # 2. 计算直方图的柱体分布，用于散点的垂直定位
-                    import numpy as np
                     
                     # 计算直方图的bins和counts
                     percentage_values = gpu_data['percentage_diff'].values
@@ -750,7 +714,7 @@ class PerformanceAnalyzer:
                                 
                                 scatter_points.append({
                                     'x': final_x,
-                                    'y': max(0.1, final_y),
+                                    'y': final_y,  # 不再强制最小值，确保在直方图内
                                     'algorithm': row['algorithm'],
                                     'data_size': mb_to_label(row['data_size']),
                                     'baseline_throughput': row['baseline_throughput'],
@@ -766,57 +730,120 @@ class PerformanceAnalyzer:
                         algorithm_colors = {}
                         algorithm_symbols = {}
                         
-                        # 为每个算法分配颜色和符号
-                        available_colors = ['red', 'green', 'blue', 'orange', 'purple', 'brown', 'pink', 'gray', 'olive', 'cyan']
+                        # 为每个算法分配颜色和符号 - 使用更丰富的调色板
+                        available_colors = ['red', 'green', 'blue', 'orange', 'purple', 'brown', 'pink', 'olive', 'cyan', 'indigo', 'emerald', 'rose', 'amber', 'teal', 'gray']
                         available_symbols = ['circle', 'square', 'diamond', 'cross', 'triangle-up', 'triangle-down', 'star', 'hexagon', 'pentagon', 'x']
                         
                         for j, algo in enumerate(algorithms):
                             algorithm_colors[algo] = available_colors[j % len(available_colors)]
                             algorithm_symbols[algo] = available_symbols[j % len(available_symbols)]
                         
-                        # 为每个算法创建一个散点trace
-                        for algo in algorithms:
-                            algo_data = scatter_df[scatter_df['algorithm'] == algo]
+                        # 统一处理所有算法的小方块，确保同一bin内不同算法用不同颜色堆叠
+                        # 1. 按bin分组所有数据点
+                        bin_groups = {}
+                        for _, row in scatter_df.iterrows():
+                            x_value = row['x']
+                            bin_index = min(int((x_value - bin_edges[0]) / bin_width), len(hist_counts) - 1)
+                            bin_index = max(0, bin_index)
                             
-                            # 根据性能差异调整透明度
-                            colors_with_alpha = []
-                            for diff in algo_data['x']:
-                                base_color = algorithm_colors[algo]
-                                alpha = 0.9 if abs(diff) > 10 else 0.6  # 差异大的点更显著
-                                colors_with_alpha.append(f'rgba({self._get_rgb_from_name(base_color)}, {alpha})')
+                            if bin_index not in bin_groups:
+                                bin_groups[bin_index] = []
+                            bin_groups[bin_index].append(row)
+                        
+                        # 2. 为每个bin创建堆叠的小方块，不同算法用不同颜色
+                        bar_x = []
+                        bar_y = []
+                        bar_base = []
+                        bar_customdata = []
+                        bar_colors_list = []
+                        
+                        for bin_index, bin_data_points in bin_groups.items():
+                            bin_height = hist_counts[bin_index]
+                            if bin_height == 0 or len(bin_data_points) == 0:
+                                continue
                             
-                            scatter_trace = go.Scatter(
-                                x=algo_data['x'],
-                                y=algo_data['y'],
-                                mode='markers',
-                                name=f'{algo} ({gpu})',
+                            # 每个小方块的高度 = bin总高度 / 该bin内的数据点数量
+                            small_block_height = bin_height / len(bin_data_points)
+                            
+                            # bin的X轴中心位置
+                            bin_center = bin_edges[bin_index] + bin_width / 2
+                            
+                            # 按算法分组后堆叠（确保颜色一致性）
+                            bin_data_points = sorted(bin_data_points, key=lambda x: x['algorithm'])
+                            
+                            # 从底部开始堆叠
+                            for block_idx, data_point in enumerate(bin_data_points):
+                                bar_x.append(bin_center)
+                                bar_y.append(small_block_height)
+                                bar_base.append(block_idx * small_block_height)  # 堆叠位置
+                                
+                                # 保存hover数据
+                                bar_customdata.append([
+                                    data_point['algorithm'],
+                                    data_point['data_size'],
+                                    data_point['baseline_throughput'],
+                                    data_point['comparison_throughput'],
+                                    data_point['percentage_diff']
+                                ])
+                                
+                                # 颜色（基于算法）- 确保相同算法使用相同颜色
+                                base_color = algorithm_colors[data_point['algorithm']]
+                                alpha = 0.9
+                                bar_colors_list.append(f'rgba({self._get_rgb_from_name(base_color)}, {alpha})')
+                        
+                        # 3. 创建统一的小方块trace
+                        if bar_x:  # 只有当有数据时才添加trace
+                            bar_trace = go.Bar(
+                                x=bar_x,
+                                y=bar_y,
+                                base=bar_base,
+                                width=bin_width * 0.8,  # 小方块宽度与bin宽度相同
+                                name=f'数据点 ({gpu})',
                                 marker=dict(
-                                    size=10,
-                                    color=colors_with_alpha,
-                                    symbol=algorithm_symbols[algo],
-                                    line=dict(color='white', width=1)
+                                    color=bar_colors_list,
+                                    line=dict(color='white', width=1),
+                                    opacity=0.9
                                 ),
-                                customdata=list(zip(
-                                    algo_data['algorithm'],
-                                    algo_data['data_size'],
-                                    algo_data['baseline_throughput'],
-                                    algo_data['comparison_throughput'],
-                                    algo_data['percentage_diff']  # 使用原始的性能差异值
-                                )),
+                                customdata=bar_customdata,
                                 hovertemplate=(
                                     f"<b>{gpu} vs {gpu_labels[0]}</b><br>"
                                     "算法: %{customdata[0]}<br>"
                                     "数据量: %{customdata[1]}<br>"
-                                    "性能差异: %{customdata[4]:+.1f}%<br>"
+                                    "性能比值: %{customdata[4]:.1f}%<br>"
                                     f"{gpu_labels[0]}: %{{customdata[2]:.2f}} GB/s<br>"
                                     f"{gpu}: %{{customdata[3]:.2f}} GB/s<br>"
                                     "<extra></extra>"
                                 ),
                                 showlegend=True
                             )
-                            fig.add_trace(scatter_trace, row=hist_row, col=hist_col)
+                            fig.add_trace(bar_trace, row=hist_row, col=hist_col)
                     
-                    # 3. 添加统计参考线，智能避免标注重叠
+                    # 3. 首先添加用户指定的参考线
+                    if reference_lines:
+                        # 获取当前对比组的参考线
+                        if len(reference_lines) == 1:
+                            current_ref_line = reference_lines[0]
+                        else:
+                            current_ref_line = reference_lines[i] if i < len(reference_lines) else reference_lines[-1]
+                        
+                        # 添加用户指定的参考线
+                        fig.add_vline(
+                            x=current_ref_line, 
+                            line_dash="solid", 
+                            line_color="blue", 
+                            line_width=3,
+                            annotation_text=f"参考线: {current_ref_line}%",
+                            annotation_position="top",
+                            annotation=dict(
+                                font=dict(size=12, color="blue"),
+                                bgcolor="rgba(255,255,255,0.9)",
+                                bordercolor="blue",
+                                borderwidth=2
+                            ),
+                            row=hist_row, col=hist_col
+                        )
+                    
+                    # 4. 添加统计参考线，智能避免标注重叠
                     mean_diff = gpu_data['percentage_diff'].mean()
                     median_diff = gpu_data['percentage_diff'].median()
                     
@@ -870,13 +897,13 @@ class PerformanceAnalyzer:
                         row=hist_row, col=hist_col
                     )
                     
-                    # 添加零线（基准线）
+                    # 添加基准线(100%)
                     fig.add_vline(
-                        x=0, 
+                        x=100, 
                         line_dash="solid", 
                         line_color="black", 
                         line_width=2,
-                        annotation_text="基准线",
+                        annotation_text="基准线(100%)",
                         annotation_position="bottom",
                         annotation=dict(
                             font=dict(size=9, color="black"),
@@ -889,7 +916,7 @@ class PerformanceAnalyzer:
                     
                     # 更新直方图子图的轴标签
                     fig.update_xaxes(
-                        title_text="性能差异百分比 (%)", 
+                        title_text="性能比值百分比 (%)", 
                         row=hist_row, col=hist_col
                     )
                     fig.update_yaxes(
@@ -898,13 +925,13 @@ class PerformanceAnalyzer:
                     )
                 
                 # 性能统计报告
-                negative_data = percentage_df[percentage_df['percentage_diff'] < 0]
+                negative_data = percentage_df[percentage_df['percentage_diff'] < 100]
                 if not negative_data.empty:
                     negative_count = len(negative_data)
                     total_count = len(percentage_df)
                     negative_ratio = (negative_count / total_count) * 100
                     
-                    print(f"⚠️  性能落后: {negative_count} 个数据点 ({negative_ratio:.1f}%)")
+                    print(f"⚠️  性能低于基准: {negative_count} 个数据点 ({negative_ratio:.1f}%)")
                     
                     # 按算法分组显示负值统计
                     neg_by_algo = negative_data.groupby('algorithm').size().sort_values(ascending=False)
@@ -959,7 +986,7 @@ class PerformanceAnalyzer:
         if save_path:
             if save_path.endswith('.html'):
                 # 生成包含统计表格的完整HTML
-                self._write_html_with_statistics(fig, save_path)
+                self._write_html_with_statistics(fig, save_path, reference_lines)
                 print(f"交互式图表已保存: {save_path}")
             else:
                 fig.write_image(save_path, width=width, height=total_height)
@@ -968,10 +995,14 @@ class PerformanceAnalyzer:
         # 不自动显示图表，避免输出HTML内容
         return fig
 
-    def generate_statistics_tables(self) -> str:
+    def generate_statistics_tables(self, reference_lines: list = None) -> str:
         """生成HTML统计分析数据表"""
         if not self.datasets:
             return "<p>无数据可显示</p>"
+        
+        # 处理参考线默认值
+        if reference_lines is None:
+            reference_lines = [100.0]
         
         html_content = []
         
@@ -987,42 +1018,39 @@ class PerformanceAnalyzer:
         html_content.append('<div class="statistics-section">')
         html_content.append('<h3>📊 GPU性能对比总览</h3>')
         html_content.append('<table class="stats-table">')
-        html_content.append('<thead><tr><th>GPU</th><th>平均吞吐量 (GB/s)</th><th>最高吞吐量 (GB/s)</th><th>数据点数量</th><th>主要优势算法</th></tr></thead>')
+        html_content.append('<thead><tr><th>GPU</th><th>最高吞吐量 (GB/s)</th><th>数据点数量</th><th>覆盖算法</th></tr></thead>')
         html_content.append('<tbody>')
         
         for gpu in gpu_labels:
             gpu_data = df[df['gpu_label'] == gpu]
             if not gpu_data.empty:
-                avg_throughput = gpu_data['throughput'].mean()
                 max_throughput = gpu_data['throughput'].max()
                 max_row = gpu_data[gpu_data['throughput'] == max_throughput].iloc[0]
                 data_count = len(gpu_data)
                 
-                # 找出该GPU表现最好的算法
-                algo_avg = gpu_data.groupby('algorithm')['throughput'].mean().sort_values(ascending=False)
-                top_algorithms = ', '.join(algo_avg.head(3).index.tolist())
+                # 列出该GPU测试的所有算法
+                algorithms_tested = ', '.join(sorted(gpu_data['algorithm'].unique()))
                 
                 html_content.append(f'<tr>')
                 html_content.append(f'<td><strong>{gpu}</strong></td>')
-                html_content.append(f'<td>{avg_throughput:.2f}</td>')
                 html_content.append(f'<td>{max_throughput:.2f}<br><small>({max_row["algorithm"]}, {max_row["data_size"]:.0f}MB)</small></td>')
                 html_content.append(f'<td>{data_count}</td>')
-                html_content.append(f'<td><small>{top_algorithms}</small></td>')
+                html_content.append(f'<td><small>{algorithms_tested}</small></td>')
                 html_content.append(f'</tr>')
         
         html_content.append('</tbody></table>')
         html_content.append('</div>')
         
-        # 2. 算法性能分析表
+        # 2. 算法性能范围分析表
         html_content.append('<div class="statistics-section">')
-        html_content.append('<h3>🔬 算法性能分析</h3>')
+        html_content.append('<h3>🔬 算法性能范围分析</h3>')
         html_content.append('<table class="stats-table">')
         html_content.append('<thead><tr><th>算法</th>')
         
         for gpu in gpu_labels:
-            html_content.append(f'<th>{gpu}<br><small>(GB/s)</small></th>')
+            html_content.append(f'<th>{gpu}<br><small>最高(GB/s)</small></th>')
         
-        html_content.append('<th>算法平均</th><th>最佳GPU</th></tr></thead>')
+        html_content.append('<th>总体最佳</th></tr></thead>')
         html_content.append('<tbody>')
         
         for algo in sorted(algorithms):
@@ -1035,16 +1063,12 @@ class PerformanceAnalyzer:
             for gpu in gpu_labels:
                 gpu_algo_data = algo_data[algo_data['gpu_label'] == gpu]
                 if not gpu_algo_data.empty:
-                    avg_perf = gpu_algo_data['throughput'].mean()
-                    gpu_performances.append((gpu, avg_perf))
-                    html_content.append(f'<td>{avg_perf:.2f}</td>')
+                    max_perf = gpu_algo_data['throughput'].max()
+                    gpu_performances.append((gpu, max_perf))
+                    html_content.append(f'<td>{max_perf:.2f}</td>')
                 else:
                     gpu_performances.append((gpu, 0))
                     html_content.append(f'<td>-</td>')
-            
-            # 算法整体平均
-            algo_avg = algo_data['throughput'].mean()
-            html_content.append(f'<td><strong>{algo_avg:.2f}</strong></td>')
             
             # 最佳GPU
             if gpu_performances:
@@ -1071,12 +1095,20 @@ class PerformanceAnalyzer:
                 baseline_gpu = gpu_labels[0]
                 comparison_gpus = gpu_labels[1:]
                 
-                for gpu in comparison_gpus:
+                for i, gpu in enumerate(comparison_gpus):
                     gpu_diff_data = percentage_df[percentage_df['gpu_label'] == gpu]
                     if gpu_diff_data.empty:
                         continue
+                    
+                    # 获取当前对比组的参考线
+                    if len(reference_lines) == 1:
+                        # 单个参考线，对所有对比组使用
+                        current_ref_line = reference_lines[0]
+                    else:
+                        # 多个参考线，每个对比组使用对应的参考线
+                        current_ref_line = reference_lines[i] if i < len(reference_lines) else reference_lines[-1]
                         
-                    html_content.append(f'<h4>{gpu} vs {baseline_gpu}</h4>')
+                    html_content.append(f'<h4>{gpu} vs {baseline_gpu} (参考线: {current_ref_line}%)</h4>')
                     html_content.append('<table class="stats-table">')
                     html_content.append('<thead><tr><th>统计指标</th><th>数值</th><th>说明</th></tr></thead>')
                     html_content.append('<tbody>')
@@ -1088,26 +1120,43 @@ class PerformanceAnalyzer:
                     min_diff = gpu_diff_data['percentage_diff'].min()
                     max_diff = gpu_diff_data['percentage_diff'].max()
                     
-                    # 性能优势统计
-                    positive_count = len(gpu_diff_data[gpu_diff_data['percentage_diff'] > 0])
-                    negative_count = len(gpu_diff_data[gpu_diff_data['percentage_diff'] < 0])
+                    # 基于参考线的性能分析
+                    above_ref_count = len(gpu_diff_data[gpu_diff_data['percentage_diff'] > current_ref_line])
+                    below_ref_count = len(gpu_diff_data[gpu_diff_data['percentage_diff'] < current_ref_line])
                     total_count = len(gpu_diff_data)
                     
+                    # 性能优势统计 (现在100%为基准)
+                    positive_count = len(gpu_diff_data[gpu_diff_data['percentage_diff'] > 100])
+                    negative_count = len(gpu_diff_data[gpu_diff_data['percentage_diff'] < 100])
+                    
                     stats_data = [
-                        ('平均差异', f'{mean_diff:+.1f}%', '正值表示性能提升，负值表示性能下降'),
-                        ('中位数差异', f'{median_diff:+.1f}%', '50%的测试点性能差异在此值以下'),
-                        ('标准差', f'{std_diff:.1f}%', '性能差异的离散程度'),
-                        ('最大提升', f'{max_diff:+.1f}%', '单个测试点的最大性能提升'),
-                        ('最大下降', f'{min_diff:+.1f}%', '单个测试点的最大性能下降'),
-                        ('性能提升比例', f'{positive_count}/{total_count} ({100*positive_count/total_count:.1f}%)', '表现更好的测试点比例'),
-                        ('性能下降比例', f'{negative_count}/{total_count} ({100*negative_count/total_count:.1f}%)', '表现较差的测试点比例')
+                        ('平均比值', f'{mean_diff:.1f}%', '大于100%表示性能提升，小于100%表示性能下降'),
+                        ('中位数比值', f'{median_diff:.1f}%', '50%的测试点性能比值在此值以下'),
+                        ('标准差', f'{std_diff:.1f}%', '性能比值的离散程度'),
+                        ('最高比值', f'{max_diff:.1f}%', '单个测试点的最高性能比值'),
+                        ('最低比值', f'{min_diff:.1f}%', '单个测试点的最低性能比值'),
+                        ('', '', ''),  # 分隔线
+                        ('高于参考线比例', f'{above_ref_count}/{total_count} ({100*above_ref_count/total_count:.1f}%)', f'性能比值>{current_ref_line}%的测试点比例'),
+                        ('低于参考线比例', f'{below_ref_count}/{total_count} ({100*below_ref_count/total_count:.1f}%)', f'性能比值<{current_ref_line}%的测试点比例'),
+                        ('', '', ''),  # 分隔线
+                        ('性能优于基准比例', f'{positive_count}/{total_count} ({100*positive_count/total_count:.1f}%)', '性能比值>100%的测试点比例'),
+                        ('性能低于基准比例', f'{negative_count}/{total_count} ({100*negative_count/total_count:.1f}%)', '性能比值<100%的测试点比例')
                     ]
                     
                     for stat_name, stat_value, stat_desc in stats_data:
                         color_class = ""
-                        if "提升" in stat_name and "+" in stat_value:
+                        # 为空行提供分隔样式
+                        if stat_name == "" and stat_value == "":
+                            html_content.append(f'<tr style="height: 8px;"><td colspan="3" style="border: none; background: #f8f9fa;"></td></tr>')
+                            continue
+                            
+                        if "优于" in stat_name and positive_count > negative_count:
                             color_class = ' class="positive"'
-                        elif "下降" in stat_name and "-" in stat_value:
+                        elif "低于" in stat_name and negative_count > positive_count:
+                            color_class = ' class="negative"'
+                        elif "高于参考线" in stat_name and above_ref_count > below_ref_count:
+                            color_class = ' class="positive"'
+                        elif "低于参考线" in stat_name and below_ref_count > above_ref_count:
                             color_class = ' class="negative"'
                             
                         html_content.append(f'<tr>')
@@ -1120,16 +1169,16 @@ class PerformanceAnalyzer:
                 
                 html_content.append('</div>')
         
-        # 4. 数据规模分析表
+        # 4. 数据规模性能分析表
         html_content.append('<div class="statistics-section">')
         html_content.append('<h3>📏 数据规模性能分析</h3>')
         html_content.append('<table class="stats-table">')
         html_content.append('<thead><tr><th>数据规模</th>')
         
         for gpu in gpu_labels:
-            html_content.append(f'<th>{gpu}<br><small>平均 (GB/s)</small></th>')
+            html_content.append(f'<th>{gpu}<br><small>最高 (GB/s)</small></th>')
         
-        html_content.append('<th>规模平均</th><th>最佳表现</th></tr></thead>')
+        html_content.append('<th>最佳表现</th></tr></thead>')
         html_content.append('<tbody>')
         
         data_sizes = sorted(df['data_size'].unique())
@@ -1152,16 +1201,12 @@ class PerformanceAnalyzer:
             for gpu in gpu_labels:
                 gpu_size_data = size_data[size_data['gpu_label'] == gpu]
                 if not gpu_size_data.empty:
-                    avg_perf = gpu_size_data['throughput'].mean()
-                    size_performances.append((gpu, avg_perf))
-                    html_content.append(f'<td>{avg_perf:.2f}</td>')
+                    max_perf = gpu_size_data['throughput'].max()
+                    size_performances.append((gpu, max_perf))
+                    html_content.append(f'<td>{max_perf:.2f}</td>')
                 else:
                     size_performances.append((gpu, 0))
                     html_content.append(f'<td>-</td>')
-            
-            # 规模平均
-            size_avg = size_data['throughput'].mean()
-            html_content.append(f'<td><strong>{size_avg:.2f}</strong></td>')
             
             # 最佳表现
             if size_performances:
@@ -1185,8 +1230,8 @@ class PerformanceAnalyzer:
             # 极端数据展示
             if extreme_data:
                 html_content.append('<div class="statistics-section">')
-                html_content.append('<h3>⚠️ 极端性能差异数据 (>300%)</h3>')
-                html_content.append(f'<p><small>共发现 <strong>{len(extreme_data)}</strong> 个极端性能差异数据点，已从常规对比分析中排除</small></p>')
+                html_content.append('<h3>⚠️ 极端性能比值数据 (>300% 或 <33%)</h3>')
+                html_content.append(f'<p><small>共发现 <strong>{len(extreme_data)}</strong> 个极端性能比值数据点，已从常规对比分析中排除</small></p>')
                 
                 # 按GPU分组显示极端数据
                 extreme_by_gpu = {}
@@ -1199,21 +1244,21 @@ class PerformanceAnalyzer:
                 for gpu, gpu_extreme_data in extreme_by_gpu.items():
                     html_content.append(f'<h4>{gpu} vs {gpu_labels[0]} - 极端案例 ({len(gpu_extreme_data)} 个)</h4>')
                     html_content.append('<table class="stats-table">')
-                    html_content.append('<thead><tr><th>算法</th><th>数据规模</th><th>性能差异</th><th>基准值</th><th>对比值</th></tr></thead>')
+                    html_content.append('<thead><tr><th>算法</th><th>数据规模</th><th>性能比值</th><th>基准值</th><th>对比值</th></tr></thead>')
                     html_content.append('<tbody>')
                     
                     # 按差异程度排序，只显示前10个
-                    gpu_extreme_data.sort(key=lambda x: abs(x['percentage_diff']), reverse=True)
+                    gpu_extreme_data.sort(key=lambda x: abs(x['percentage_diff'] - 100), reverse=True)
                     for item in gpu_extreme_data[:10]:
                         data_size_label = f"{int(item['data_size'] * 1024)}KB" if item['data_size'] < 1 else \
                                         f"{int(item['data_size'])}MB" if item['data_size'] < 1024 else \
                                         f"{int(item['data_size'] / 1024)}GB"
                         
-                        diff_class = 'positive' if item['percentage_diff'] > 0 else 'negative'
+                        diff_class = 'positive' if item['percentage_diff'] > 100 else 'negative'
                         html_content.append('<tr>')
                         html_content.append(f'<td>{item["algorithm"]}</td>')
                         html_content.append(f'<td>{data_size_label}</td>')
-                        html_content.append(f'<td class="{diff_class}"><strong>{item["percentage_diff"]:+.1f}%</strong></td>')
+                        html_content.append(f'<td class="{diff_class}"><strong>{item["percentage_diff"]:.1f}%</strong></td>')
                         html_content.append(f'<td>{item["baseline_throughput"]:.2f} GB/s</td>')
                         html_content.append(f'<td>{item["comparison_throughput"]:.2f} GB/s</td>')
                         html_content.append('</tr>')
@@ -1392,7 +1437,7 @@ class PerformanceAnalyzer:
         </style>
         """
 
-    def _write_html_with_statistics(self, fig, save_path: str):
+    def _write_html_with_statistics(self, fig, save_path: str, reference_lines: list = None):
         """将图表和统计表格写入HTML文件"""
         import tempfile
         import os
@@ -1409,7 +1454,7 @@ class PerformanceAnalyzer:
         os.unlink(tmp_file.name)
         
         # 生成统计表格
-        statistics_html = self.generate_statistics_tables()
+        statistics_html = self.generate_statistics_tables(reference_lines)
         
         # 获取样式
         styles = self._get_html_styles()
@@ -1436,12 +1481,16 @@ class PerformanceAnalyzer:
         with open(save_path, 'w', encoding='utf-8') as f:
             f.write(plotly_html)
 
-    def generate_summary_report(self) -> str:
+    def generate_summary_report(self, reference_lines: list = None) -> str:
         """生成性能分析总结报告"""
         df = self.get_combined_dataframe()
         
         if df.empty:
             return "没有数据可以分析"
+        
+        # 处理参考线默认值
+        if reference_lines is None:
+            reference_lines = [100.0]
         
         report = []
         report.append("=" * 50)
@@ -1462,37 +1511,54 @@ class PerformanceAnalyzer:
         report.append(f"  Throughput: {best_perf['throughput']:.2f} GB/s")
         report.append("")
         
-        # 各GPU平均性能
-        report.append("Average Performance by GPU:")
+        # 各GPU最佳性能
+        report.append("Best Performance by GPU:")
         for gpu in df['gpu_label'].unique():
-            avg_perf = df[df['gpu_label'] == gpu]['throughput'].mean()
-            report.append(f"  {gpu}: {avg_perf:.2f} GB/s")
+            gpu_data = df[df['gpu_label'] == gpu]
+            max_perf = gpu_data['throughput'].max()
+            max_row = gpu_data[gpu_data['throughput'] == max_perf].iloc[0]
+            report.append(f"  {gpu}: {max_perf:.2f} GB/s ({max_row['algorithm']}, {max_row['data_size']:.0f}MB)")
         report.append("")
         
         # 性能百分比差异分析（如果有多个GPU）
         gpu_labels = df['gpu_label'].unique()
         if len(gpu_labels) > 1:
-            report.append("Performance Percentage Differences:")
+            report.append("Performance Percentage Ratios:")
             report.append(f"  Baseline GPU: {gpu_labels[0]}")
             report.append("")
             
             percentage_df, extreme_data, anomaly_data = self.calculate_percentage_differences()
             if percentage_df is not None:
-                for gpu in gpu_labels[1:]:
+                comparison_gpus = gpu_labels[1:]
+                for i, gpu in enumerate(comparison_gpus):
                     gpu_data = percentage_df[percentage_df['gpu_label'] == gpu]
                     if not gpu_data.empty:
-                        avg_diff = gpu_data['percentage_diff'].mean()
+                        # 获取当前对比组的参考线
+                        if len(reference_lines) == 1:
+                            current_ref_line = reference_lines[0]
+                        else:
+                            current_ref_line = reference_lines[i] if i < len(reference_lines) else reference_lines[-1]
+                        
                         max_diff = gpu_data['percentage_diff'].max()
                         min_diff = gpu_data['percentage_diff'].min()
-                        report.append(f"  {gpu} vs {gpu_labels[0]}:")
-                        report.append(f"    Average: {avg_diff:+.1f}%")
-                        report.append(f"    Max: {max_diff:+.1f}%")
-                        report.append(f"    Min: {min_diff:+.1f}%")
+                        median_diff = gpu_data['percentage_diff'].median()
+                        
+                        # 基于参考线的统计
+                        above_ref_count = len(gpu_data[gpu_data['percentage_diff'] > current_ref_line])
+                        below_ref_count = len(gpu_data[gpu_data['percentage_diff'] < current_ref_line])
+                        total_count = len(gpu_data)
+                        
+                        report.append(f"  {gpu} vs {gpu_labels[0]} (Reference: {current_ref_line}%):")
+                        report.append(f"    Max Ratio: {max_diff:.1f}%")
+                        report.append(f"    Min Ratio: {min_diff:.1f}%")
+                        report.append(f"    Median Ratio: {median_diff:.1f}%")
+                        report.append(f"    Above Reference: {above_ref_count}/{total_count} ({100*above_ref_count/total_count:.1f}%)")
+                        report.append(f"    Below Reference: {below_ref_count}/{total_count} ({100*below_ref_count/total_count:.1f}%)")
                         report.append("")
             
             # 添加极端数据报告
             if extreme_data:
-                report.append("Extreme Performance Differences (>300%):")
+                report.append("Extreme Performance Ratios (>300% or <33%):")
                 report.append(f"  Total extreme data points: {len(extreme_data)}")
                 report.append("")
                 
@@ -1507,13 +1573,13 @@ class PerformanceAnalyzer:
                 for gpu, gpu_extreme_data in extreme_by_gpu.items():
                     report.append(f"  {gpu} vs {gpu_labels[0]} - Extreme Cases:")
                     # 按差异程度排序
-                    gpu_extreme_data.sort(key=lambda x: abs(x['percentage_diff']), reverse=True)
+                    gpu_extreme_data.sort(key=lambda x: abs(x['percentage_diff'] - 100), reverse=True)
                     
                     for item in gpu_extreme_data[:10]:  # 只显示前10个最极端的
                         data_size_label = f"{int(item['data_size'] * 1024)}KB" if item['data_size'] < 1 else \
                                         f"{int(item['data_size'])}MB" if item['data_size'] < 1024 else \
                                         f"{int(item['data_size'] / 1024)}GB"
-                        report.append(f"    {item['algorithm']} ({data_size_label}): {item['percentage_diff']:+.1f}% "
+                        report.append(f"    {item['algorithm']} ({data_size_label}): {item['percentage_diff']:.1f}% "
                                     f"({item['baseline_throughput']:.2f} → {item['comparison_throughput']:.2f} GB/s)")
                     
                     if len(gpu_extreme_data) > 10:
@@ -1548,69 +1614,108 @@ class PerformanceAnalyzer:
                         report.append(f"    ... and {len(gpu_anomaly_data) - 15} more anomalous cases")
                     report.append("")
         
-        # 各算法平均性能
-        report.append("Average Performance by Algorithm:")
+        # 各算法最佳性能
+        report.append("Best Performance by Algorithm:")
         for algo in df['algorithm'].unique():
-            avg_perf = df[df['algorithm'] == algo]['throughput'].mean()
-            report.append(f"  {algo}: {avg_perf:.2f} GB/s")
+            algo_data = df[df['algorithm'] == algo]
+            max_perf = algo_data['throughput'].max()
+            max_row = algo_data[algo_data['throughput'] == max_perf].iloc[0]
+            report.append(f"  {algo}: {max_perf:.2f} GB/s ({max_row['gpu_label']}, {max_row['data_size']:.0f}MB)")
         
         return "\n".join(report)
 
 
-def create_comprehensive_datasets():
-    """创建综合性能数据集，包含更多算法类别和数据规模"""
+def create_comprehensive_datasets(scale_factor=1.0):
+    """创建综合性能数据集，包含更多算法类别和数据规模
     
-    # 扩展的并行计算算法类别
+    Args:
+        scale_factor: 数据量缩放系数，1.0=完整数据集，0.1=测试用小数据集
+    """
+    
+    # CUB和Thrust相关的GPU并行计算算法
     algorithms = {
-        # 基础并行算法
-        'sort': 'Parallel Sorting',
-        'reduce': 'Parallel Reduction', 
-        'scan': 'Prefix Sum/Scan',
-        'histogram': 'Histogram Computing',
-        'compact': 'Stream Compaction',
+        # CUB核心算法
+        'cub_reduce': 'CUB Reduce',
+        'cub_scan': 'CUB Scan/Prefix Sum',
+        'cub_sort': 'CUB Radix Sort',
+        'cub_histogram': 'CUB Histogram',
+        'cub_select': 'CUB Stream Compaction',
         
-        # 线性代数算法
-        'matmul': 'Matrix Multiplication',
-        'gemv': 'Matrix-Vector Multiply',
-        'gemm': 'General Matrix Multiply',
-        'spmv': 'Sparse Matrix-Vector',
-        'trsv': 'Triangular Solve',
+        # Thrust算法
+        'thrust_reduce': 'Thrust Reduce',
+        'thrust_scan': 'Thrust Scan',
+        'thrust_sort': 'Thrust Sort',
+        'thrust_transform': 'Thrust Transform',
+        'thrust_copy_if': 'Thrust Copy If',
         
-        # 图像/信号处理算法
-        'conv2d': '2D Convolution',
-        'conv3d': '3D Convolution',
-        'fft': 'Fast Fourier Transform',
-        'gaussian_blur': 'Gaussian Blur',
-        'bilateral_filter': 'Bilateral Filter',
-        
-        # 机器学习算法
-        'dnn_training': 'DNN Training',
-        'dnn_inference': 'DNN Inference',
-        'cnn_forward': 'CNN Forward Pass',
-        'cnn_backward': 'CNN Backward Pass',
-        'transformer_attn': 'Transformer Attention',
-        
-        # 科学计算算法
-        'stencil_2d': '2D Stencil Computation',
-        'stencil_3d': '3D Stencil Computation',
-        'molecular_dynamics': 'Molecular Dynamics',
-        'monte_carlo': 'Monte Carlo Simulation',
-        'n_body': 'N-Body Simulation'
+        # 组合算法
+        'reduce_by_key': 'Reduce By Key',
+        'unique': 'Unique/Adjacent Difference',
+        'partition': 'Partition',
+        'merge': 'Merge',
+        'set_operations': 'Set Operations'
     }
     
     # 扩展的数据规模范围 (几KB到几GB) - 以MB为单位的数值，以2倍递增
-    data_sizes_mb = [
-        0.004, 0.008, 0.016, 0.032, 0.064, 0.125, 0.25, 0.5, 1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096
+    # 增强的数据采样：1k起始，4GB结束，初期密集采样
+    base_sizes = [1.0, 1.2, 1.6, 1.8]  # 初期基础点：1MB, 1.2MB, 1.6MB, 1.8MB
+    
+    # 生成完整的数据规模序列
+    data_sizes_mb = []
+    
+    # 添加初期基础点及其2倍扩展序列
+    for base in base_sizes:
+        current = base
+        while current <= 4096:  # 扩展到4GB
+            data_sizes_mb.append(current)
+            current *= 2
+    
+    # 在1-4GB范围内增加更多采样密度
+    additional_1gb_4gb = [
+        1024, 1280, 1536, 1792,  # 1GB-1.75GB 范围
+        2048, 2304, 2560, 2816, 3072, 3328, 3584, 3840,  # 2GB-3.75GB 范围  
+        4096  # 4GB
     ]
     
-    # 对应的显示标签  
-    data_size_labels = [
-        '4KB', '8KB', '16KB', '32KB', '64KB', '128KB', '256KB', '512KB', 
-        '1MB', '2MB', '4MB', '8MB', '16MB', '32MB', '64MB', '128MB', 
-        '256MB', '512MB', '1GB', '2GB', '4GB'
-    ]
+    # 合并并去重排序
+    data_sizes_mb.extend(additional_1gb_4gb)
+    data_sizes_mb = sorted(list(set(data_sizes_mb)))
     
-    # GPU型号及其性能特征 (只测试3个GPU)
+    # 生成对应的显示标签
+    data_size_labels = []
+    for size_mb in data_sizes_mb:
+        if size_mb < 1:
+            data_size_labels.append(f'{int(size_mb * 1024)}KB')
+        elif size_mb < 1024:
+            if size_mb == int(size_mb):
+                data_size_labels.append(f'{int(size_mb)}MB')
+            else:
+                data_size_labels.append(f'{size_mb:.1f}MB')
+        else:
+            gb_size = size_mb / 1024
+            if gb_size == int(gb_size):
+                data_size_labels.append(f'{int(gb_size)}GB')
+            else:
+                data_size_labels.append(f'{gb_size:.1f}GB')
+    
+    # 根据scale_factor调整数据规模
+    if scale_factor < 1.0:
+        # 测试模式：减少算法和数据规模
+        algorithm_count = max(3, int(len(algorithms) * scale_factor))
+        data_size_count = max(5, int(len(data_sizes_mb) * scale_factor))
+        
+        selected_algorithms = dict(list(algorithms.items())[:algorithm_count])
+        selected_data_sizes = [data_sizes_mb[i] for i in range(0, len(data_sizes_mb), max(1, len(data_sizes_mb) // data_size_count))][:data_size_count]
+        selected_labels = [data_size_labels[i] for i in range(0, len(data_size_labels), max(1, len(data_size_labels) // data_size_count))][:data_size_count]
+        
+        print(f"测试模式 (scale={scale_factor}): {len(selected_algorithms)} 种算法, {len(selected_data_sizes)} 个数据规模")
+    else:
+        # 完整模式
+        selected_algorithms = algorithms
+        selected_data_sizes = data_sizes_mb
+        selected_labels = data_size_labels
+    
+    # GPU型号及其性能特征 (测试5个GPU)
     gpu_configs = {
         'RTX_4090': {
             'name': 'RTX_4090',
@@ -1632,6 +1737,27 @@ def create_comprehensive_datasets():
             'compute_units': 132,
             'base_clock': 1980,
             'memory_size': 80,
+        },
+        'X500': {
+            'name': 'X500',
+            'memory_bandwidth': 1548,  # 约A100的80%
+            'compute_units': 96,
+            'base_clock': 1300,
+            'memory_size': 64,
+        },
+        'X500_optimized': {
+            'name': 'X500_optimized',
+            'memory_bandwidth': 1548,  # 与X500相同的硬件
+            'compute_units': 96,
+            'base_clock': 1300,
+            'memory_size': 64,
+        },
+        'X600': {
+            'name': 'X600',
+            'memory_bandwidth': 968,   # 约A100的50%
+            'compute_units': 72,
+            'base_clock': 1100,
+            'memory_size': 48,
         }
     }
     
@@ -1646,23 +1772,22 @@ def create_comprehensive_datasets():
         
         # 算法特性系数 - 不同算法有不同的线性系数，可能互有胜负
         algorithm_coefficients = {
-            # 基础并行算法
-            'sort': 6.8, 'reduce': 8.2, 'scan': 7.5, 'histogram': 5.9, 'compact': 6.4,
-            # 线性代数算法  
-            'matmul': 9.1, 'gemv': 7.8, 'gemm': 9.5, 'spmv': 6.2, 'trsv': 7.3,
-            # 图像处理算法
-            'conv2d': 8.7, 'conv3d': 9.3, 'fft': 7.1, 'gaussian_blur': 8.0, 'bilateral_filter': 8.4,
-            # 机器学习算法
-            'dnn_training': 9.8, 'dnn_inference': 8.6, 'cnn_forward': 9.2, 'cnn_backward': 9.6, 'transformer_attn': 8.9,
-            # 科学计算算法
-            'stencil_2d': 7.6, 'stencil_3d': 8.1, 'molecular_dynamics': 8.5, 'monte_carlo': 8.8, 'n_body': 8.3
+            # CUB核心算法
+            'cub_reduce': 8.2, 'cub_scan': 7.5, 'cub_sort': 6.8, 'cub_histogram': 5.9, 'cub_select': 6.4,
+            # Thrust算法
+            'thrust_reduce': 8.0, 'thrust_scan': 7.8, 'thrust_sort': 6.5, 'thrust_transform': 9.1, 'thrust_copy_if': 7.2,
+            # 组合算法
+            'reduce_by_key': 7.6, 'unique': 7.0, 'partition': 6.8, 'merge': 8.5, 'set_operations': 7.4
         }
         
-        # GPU差异系数 - 不同GPU差距不大，大约20%范围内
+        # GPU差异系数
         gpu_multipliers = {
-            'RTX_4090': 1.0,    # 基准
-            'A100': 1.08,       # 稍高8%
-            'H100': 1.04        # 稍高4%
+            'RTX_4090': 1.0,        # 基准
+            'A100': 1.08,           # 稍高8%
+            'H100': 1.04,           # 稍高4%
+            'X500': 0.85,           # 约85%性能
+            'X500_optimized': 1.0,  # 软件优化后达到基准水平
+            'X600': 0.52            # 约52%性能
         }
         
         # 获取算法系数和GPU系数
@@ -1691,8 +1816,8 @@ def create_comprehensive_datasets():
         print(f"生成 {gpu_name} 数据集...")
         gpu_data = []
         
-        for algorithm in algorithms.keys():
-            for i, data_size_mb in enumerate(data_sizes_mb):
+        for algorithm in selected_algorithms.keys():
+            for i, data_size_mb in enumerate(selected_data_sizes):
                 # 检查GPU内存限制
                 data_bytes = mb_to_bytes(data_size_mb)
                 if data_bytes > gpu_config['memory_size'] * 1024**3:
@@ -1703,7 +1828,7 @@ def create_comprehensive_datasets():
                 gpu_data.append({
                     'algorithm': algorithm,
                     'data_size_mb': data_size_mb,  # 数值形式
-                    'data_size_label': data_size_labels[i],  # 显示标签
+                    'data_size_label': selected_labels[i] if i < len(selected_labels) else f"{data_size_mb}MB",  # 显示标签
                     'throughput': max(throughput, 0.01)  # 确保非负值
                 })
         
@@ -1717,14 +1842,14 @@ def create_comprehensive_datasets():
         
         print(f"  - {filename}: {len(gpu_data)} 条记录")
     
-    print(f"\n共生成 {len(datasets)} 个GPU数据集，覆盖 {len(algorithms)} 种算法类型")
-    print(f"数据规模范围: {data_size_labels[0]} - {data_size_labels[-1]}")
+    print(f"\n共生成 {len(datasets)} 个GPU数据集，覆盖 {len(selected_algorithms)} 种算法类型")
+    print(f"数据规模范围: {selected_labels[0]} - {selected_labels[-1]}")
     
     return datasets
 
-def create_sample_datasets():
+def create_sample_datasets(scale_factor=1.0):
     """创建简单示例数据集（向后兼容）"""
-    return create_comprehensive_datasets()
+    return create_comprehensive_datasets(scale_factor=scale_factor)
 
 
 def main():
@@ -1741,12 +1866,16 @@ def main():
                         help='Chart height (default: 800)')
     parser.add_argument('--create-sample', action='store_true',
                         help='Create sample datasets and exit')
+    parser.add_argument('--sample-scale', type=float, default=1.0,
+                        help='Data generation scale factor (default: 1.0, use 0.2 for testing)')
+    parser.add_argument('--reference-lines', nargs='+', type=float,
+                        help='Reference lines for performance comparison (e.g., --reference-lines 80 90)')
     
     args = parser.parse_args()
     
     # 创建示例数据
     if args.create_sample:
-        create_sample_datasets()
+        create_sample_datasets(scale_factor=args.sample_scale)
         return
     
     # 验证必需参数（仅在没有创建示例数据时需要）
@@ -1783,11 +1912,12 @@ def main():
     analyzer.create_comparison_line_chart(
         save_path=args.output,
         width=args.width,
-        height=args.height
+        height=args.height,
+        reference_lines=args.reference_lines
     )
     
     # 生成分析报告
-    print("\n" + analyzer.generate_summary_report())
+    print("\n" + analyzer.generate_summary_report(args.reference_lines))
 
 
 if __name__ == "__main__":
