@@ -11,15 +11,9 @@ import pandas as pd
 import numpy as np
 import argparse
 import sys
+import math
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional
-from scipy import stats
-from sklearn.linear_model import LinearRegression
-from sklearn.preprocessing import PolynomialFeatures
-from sklearn.metrics import r2_score
-from sklearn.cluster import KMeans
-import warnings
-warnings.filterwarnings('ignore')
 
 class PerformanceAnalyzer:
     def __init__(self):
@@ -204,13 +198,41 @@ class PerformanceAnalyzer:
         
         return pd.DataFrame(percentage_data), extreme_data, anomaly_data
 
-    def create_comparison_line_chart(self, save_path: str = None, width: int = 1200, height: int = 800, reference_lines: list = None):
+    def _add_bandwidth_reference_lines(self, fig, df, bandwidth_limits: list, has_multiple_gpus: bool):
+        """添加带宽上限参考线到第一个图表"""
+        # 为不同的带宽线设置颜色
+        bandwidth_colors = ['red', 'orange', 'purple', 'brown', 'green']
+        
+        for i, bandwidth_limit in enumerate(bandwidth_limits):
+            color = bandwidth_colors[i % len(bandwidth_colors)]
+            
+            # 添加水平参考线
+            if has_multiple_gpus:
+                fig.add_hline(
+                    y=bandwidth_limit,
+                    line_dash="dashdot",
+                    line_color=color,
+                    line_width=3,
+                    row=1, col=1
+                )
+            else:
+                fig.add_hline(
+                    y=bandwidth_limit,
+                    line_dash="dashdot",
+                    line_color=color,
+                    line_width=3
+                )
+            
+
+    def create_comparison_line_chart(self, save_path: str = None, width: int = 1200, height: int = 800, reference_lines: list = None, bandwidth_limits: list = None, static_html: bool = False):
         """
         创建多GPU性能对比折线图和百分比差异图
         包含原始性能图和相对于第一个GPU的百分比差异图
         
         Args:
             reference_lines: 参考线列表，默认[100.0]。单个值表示全局参考线，多个值表示每个对比组的参考线
+            bandwidth_limits: 带宽上限参考线列表，如[1600, 2000]表示1600GB/s和2000GB/s带宽上限
+            static_html: 是否生成静态HTML（包含PNG图片）而非交互式Plotly，避免网页卡顿
         """
         df = self.get_combined_dataframe()
         
@@ -379,6 +401,10 @@ class PerformanceAnalyzer:
                     fig.add_trace(scatter_trace, row=1, col=1)
                 else:
                     fig.add_trace(scatter_trace)
+        
+        # 添加带宽上限参考线到原始性能图（第一个图）
+        if bandwidth_limits:
+            self._add_bandwidth_reference_lines(fig, df, bandwidth_limits, has_multiple_gpus)
         
         # 如果有多个GPU，添加百分比差异图到第二个子图
         if has_multiple_gpus:
@@ -992,9 +1018,14 @@ class PerformanceAnalyzer:
         # 保存图表
         if save_path:
             if save_path.endswith('.html'):
-                # 生成包含统计表格的完整HTML
-                self._write_html_with_statistics(fig, save_path, reference_lines)
-                print(f"交互式图表已保存: {save_path}")
+                if static_html:
+                    # 生成静态HTML（包含PNG图片）
+                    self._write_static_html_with_statistics(fig, save_path, reference_lines, width, total_height)
+                    print(f"静态HTML图表已保存: {save_path}")
+                else:
+                    # 生成包含统计表格的交互式HTML
+                    self._write_html_with_statistics(fig, save_path, reference_lines)
+                    print(f"交互式图表已保存: {save_path}")
             else:
                 fig.write_image(save_path, width=width, height=total_height)
                 print(f"静态图表已保存: {save_path}")
@@ -1488,6 +1519,129 @@ class PerformanceAnalyzer:
         with open(save_path, 'w', encoding='utf-8') as f:
             f.write(plotly_html)
 
+    def _write_static_html_with_statistics(self, fig, save_path: str, reference_lines: list = None, width: int = 1200, height: int = 800):
+        """将图表作为PNG图片和统计表格写入静态HTML文件"""
+        import base64
+        
+        try:
+            # 生成PNG图片到内存
+            img_bytes = fig.to_image(format="png", width=width, height=height)
+            img_base64 = base64.b64encode(img_bytes).decode('utf-8')
+        except Exception as e:
+            print(f"⚠️  无法生成PNG图片: {e}")
+            print("🔄 使用matplotlib生成静态图片...")
+            try:
+                img_base64 = self._generate_matplotlib_image(width, height)
+            except Exception as e2:
+                print(f"⚠️  matplotlib也无法生成图片: {e2}")
+                print("🔄 回退到交互式HTML模式...")
+                self._write_html_with_statistics(fig, save_path, reference_lines)
+                return
+        
+        # 生成统计表格
+        statistics_html = self.generate_statistics_tables(reference_lines)
+        
+        # 获取样式
+        styles = self._get_html_styles()
+        
+        # 创建完整的静态HTML
+        html_content = f"""<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>GPU性能对比分析</title>
+    {styles}
+    <style>
+        .chart-container {{
+            text-align: center;
+            margin: 20px auto;
+            max-width: {width}px;
+        }}
+        .chart-image {{
+            max-width: 100%;
+            height: auto;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }}
+    </style>
+</head>
+<body>
+    <div class="chart-container">
+        <img src="data:image/png;base64,{img_base64}" alt="GPU性能对比图表" class="chart-image">
+    </div>
+    <div class="statistics-container">
+        <h2 style="text-align: center; color: #2c3e50; margin-bottom: 30px;">
+            📈 GPU性能统计分析报告
+        </h2>
+        {statistics_html}
+    </div>
+</body>
+</html>"""
+        
+        # 写入HTML文件
+        with open(save_path, 'w', encoding='utf-8') as f:
+            f.write(html_content)
+
+    def _generate_matplotlib_image(self, width: int = 1200, height: int = 800) -> str:
+        """使用matplotlib生成静态图片作为备选方案"""
+        import matplotlib.pyplot as plt
+        import matplotlib
+        matplotlib.use('Agg')  # 使用非交互式后端
+        import base64
+        import io
+        
+        df = self.get_combined_dataframe()
+        if df.empty:
+            raise ValueError("没有数据可以绘制")
+        
+        # 设置图片大小
+        dpi = 100
+        fig_width = width / dpi
+        fig_height = height / dpi
+        
+        # 创建图表
+        fig, ax = plt.subplots(figsize=(fig_width, fig_height), dpi=dpi)
+        
+        # 为每个GPU绘制数据
+        gpu_labels = df['gpu_label'].unique()
+        colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b']
+        
+        for i, gpu in enumerate(gpu_labels):
+            gpu_data = df[df['gpu_label'] == gpu]
+            color = colors[i % len(colors)]
+            
+            # 按算法分组绘制
+            for algorithm in gpu_data['algorithm'].unique():
+                alg_data = gpu_data[gpu_data['algorithm'] == algorithm]
+                if not alg_data.empty:
+                    ax.plot(alg_data['data_size'], alg_data['throughput'], 
+                           'o-', color=color, alpha=0.7, markersize=3,
+                           label=f'{gpu}-{algorithm}' if i == 0 else "")
+        
+        # 设置标签和标题
+        ax.set_xlabel('数据量 (MB)', fontsize=12)
+        ax.set_ylabel('吞吐量 (GB/s)', fontsize=12)
+        ax.set_title('GPU性能对比', fontsize=14, fontweight='bold')
+        ax.grid(True, alpha=0.3)
+        ax.set_xscale('log')
+        
+        # 添加图例
+        if len(gpu_labels) > 1:
+            ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+        
+        # 调整布局
+        plt.tight_layout()
+        
+        # 保存到内存
+        img_buffer = io.BytesIO()
+        plt.savefig(img_buffer, format='png', dpi=dpi, bbox_inches='tight')
+        img_buffer.seek(0)
+        img_base64 = base64.b64encode(img_buffer.getvalue()).decode('utf-8')
+        
+        plt.close(fig)
+        return img_base64
+
     def generate_summary_report(self, reference_lines: list = None) -> str:
         """生成性能分析总结报告"""
         df = self.get_combined_dataframe()
@@ -1722,84 +1876,44 @@ def create_comprehensive_datasets(scale_factor=1.0):
         selected_data_sizes = data_sizes_mb
         selected_labels = data_size_labels
     
-    # GPU型号及其性能特征 (测试5个GPU)
+    # GPU型号配置 (简化版，只保留必要的name)
     gpu_configs = {
-        'RTX_4090': {
-            'name': 'RTX_4090',
-            'memory_bandwidth': 1008,  # GB/s
-            'compute_units': 128,
-            'base_clock': 2230,  # MHz
-            'memory_size': 24,   # GB
-        },
-        'A100': {
-            'name': 'A100',
-            'memory_bandwidth': 1935,
-            'compute_units': 108,
-            'base_clock': 1410,
-            'memory_size': 80,
-        },
-        'H100': {
-            'name': 'H100',
-            'memory_bandwidth': 3350,
-            'compute_units': 132,
-            'base_clock': 1980,
-            'memory_size': 80,
-        },
-        'X500': {
-            'name': 'X500',
-            'memory_bandwidth': 1548,  # 约A100的80%
-            'compute_units': 96,
-            'base_clock': 1300,
-            'memory_size': 64,
-        },
-        'X500_optimized': {
-            'name': 'X500_optimized',
-            'memory_bandwidth': 1548,  # 与X500相同的硬件
-            'compute_units': 96,
-            'base_clock': 1300,
-            'memory_size': 64,
-        },
-        'X600': {
-            'name': 'X600',
-            'memory_bandwidth': 968,   # 约A100的50%
-            'compute_units': 72,
-            'base_clock': 1100,
-            'memory_size': 48,
-        }
+        'RTX_4090': {'name': 'RTX_4090'},
+        'A100': {'name': 'A100'},
+        'H100': {'name': 'H100'},
+        'X500': {'name': 'X500'},
+        'X500_optimized': {'name': 'X500_optimized'},
+        'X600': {'name': 'X600'}
     }
     
     np.random.seed(42)
     
-    def mb_to_bytes(size_mb):
-        """将MB为单位的数值转换为字节数"""
-        return size_mb * 1024 * 1024
-    
     def calculate_roofline_performance(algorithm, data_size_mb, gpu_config):
         """简化的roofline模型：y=a*x 线性关系"""
         
-        # 算法特性系数 - 不同算法有不同的线性系数，可能互有胜负
+        # 算法特性系数 - 调整以使A100在大数据量时达到约1700GB/s平台
         algorithm_coefficients = {
             # CUB核心算法
-            'cub_reduce': 8.2, 'cub_scan': 7.5, 'cub_sort': 6.8, 'cub_histogram': 5.9, 'cub_select': 6.4,
-            # Thrust算法
-            'thrust_reduce': 8.0, 'thrust_scan': 7.8, 'thrust_sort': 6.5, 'thrust_transform': 9.1, 'thrust_copy_if': 7.2,
+            'cub_reduce': 16.5, 'cub_scan': 15.0, 'cub_sort': 13.6, 'cub_histogram': 11.8, 'cub_select': 12.8,
+            # Thrust算法  
+            'thrust_reduce': 16.0, 'thrust_scan': 15.6, 'thrust_sort': 13.0, 'thrust_transform': 18.2, 'thrust_copy_if': 14.4,
             # 组合算法
-            'reduce_by_key': 7.6, 'unique': 7.0, 'partition': 6.8, 'merge': 8.5, 'set_operations': 7.4
+            'reduce_by_key': 15.2, 'unique': 14.0, 'partition': 13.6, 'merge': 17.0, 'set_operations': 14.8
         }
         
-        # GPU差异系数
+        # GPU相对性能系数 (基于A100=1700GB/s平台调整)
         gpu_multipliers = {
-            'RTX_4090': 1.0,        # 基准
-            'A100': 1.08,           # 稍高8%
-            'H100': 1.04,           # 稍高4%
-            'X500': 0.85,           # 约85%性能
-            'X500_optimized': 1.0,  # 软件优化后达到基准水平
-            'X600': 0.52            # 约52%性能
+            'RTX_4090': 0.61,       # ~1040GB/s (A100的61%)
+            'A100': 1.0,            # ~1700GB/s 基准
+            'H100': 1.35,           # ~2300GB/s (A100的135%)  
+            'X500': 0.80,           # ~1360GB/s (A100的80%)
+            'X500_optimized': 0.90, # ~1530GB/s (软件优化提升到90%)
+            'X600': 0.50            # ~850GB/s (A100的50%)
         }
         
         # 获取算法系数和GPU系数
-        a = algorithm_coefficients.get(algorithm, 7.5)  # 默认系数7.5
-        gpu_factor = gpu_multipliers.get(gpu_config.get('name', 'RTX_4090'), 1.0)
+        a = algorithm_coefficients.get(algorithm, 15.0)  # 默认系数15.0
+        gpu_factor = gpu_multipliers.get(gpu_config.get('name', 'A100'), 1.0)
         
         data_mb = data_size_mb
         
@@ -1825,11 +1939,6 @@ def create_comprehensive_datasets(scale_factor=1.0):
         
         for algorithm in selected_algorithms.keys():
             for i, data_size_mb in enumerate(selected_data_sizes):
-                # 检查GPU内存限制
-                data_bytes = mb_to_bytes(data_size_mb)
-                if data_bytes > gpu_config['memory_size'] * 1024**3:
-                    continue  # 跳过超出GPU内存的数据大小
-                
                 throughput = calculate_roofline_performance(algorithm, data_size_mb, gpu_config)
                 
                 gpu_data.append({
@@ -1877,6 +1986,10 @@ def main():
                         help='Data generation scale factor (default: 1.0, use 0.2 for testing)')
     parser.add_argument('--reference-lines', nargs='+', type=float,
                         help='Reference lines for performance comparison (e.g., --reference-lines 80 90)')
+    parser.add_argument('--bandwidth-limits', nargs='+', type=float,
+                        help='Bandwidth upper limit reference lines in GB/s (e.g., --bandwidth-limits 1600 2000)')
+    parser.add_argument('--static-html', action='store_true',
+                        help='Generate static HTML with PNG image instead of interactive Plotly (faster loading)')
     
     args = parser.parse_args()
     
@@ -1920,7 +2033,9 @@ def main():
         save_path=args.output,
         width=args.width,
         height=args.height,
-        reference_lines=args.reference_lines
+        reference_lines=args.reference_lines,
+        bandwidth_limits=args.bandwidth_limits,
+        static_html=args.static_html
     )
     
     # 生成分析报告

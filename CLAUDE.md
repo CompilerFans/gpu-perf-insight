@@ -30,6 +30,14 @@ python perf_analyzer_plotly.py \
 
 # 快速运行demo构建脚本
 bash build.sh
+
+# 生成静态HTML图片（避免网页卡顿）
+python perf_analyzer_plotly.py \
+  --csv-files rtx_4090_performance.csv a100_performance.csv \
+  --labels "RTX 4090" "A100" \
+  --bandwidth-limits 1600 2000 \
+  --static-html \
+  --output gpu_comparison_static.html
 ```
 
 ## Project Architecture
@@ -51,9 +59,10 @@ bash build.sh
 
 1. **多文件对比**: 支持同时加载多个CSV文件，每个文件设置独立标签
 2. **交互式图表**: 使用Plotly生成可缩放、可悬停的交互式折线图
-3. **并行算法支持**: 专门针对sort、reduce、scan、matmul、conv2d等并行计算算法
-4. **命令行界面**: 完整的命令行参数支持，便于批处理和自动化
-5. **报告生成**: 自动生成性能统计分析报告
+3. **静态图片选项**: 支持`--static-html`生成PNG图片，避免大数据量时网页卡顿
+4. **并行算法支持**: 专门针对sort、reduce、scan、matmul、conv2d等并行计算算法
+5. **命令行界面**: 完整的命令行参数支持，便于批处理和自动化
+6. **报告生成**: 自动生成性能统计分析报告
 
 ### Data Structure
 
